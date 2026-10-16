@@ -10,6 +10,7 @@ import { CounterCalculator } from './components/CounterCalculator';
 import { CustomerLedger } from './components/CustomerLedger';
 import { AddProductModal } from './components/AddProductModal';
 import { InvoiceModal } from './components/InvoiceModal';
+import { InstallModal, PWAInstallButton, OfflineBanner } from './components/InstallModal';
 import { 
   BatteryCharging, 
   Zap, 
@@ -88,6 +89,7 @@ export default function App() {
 
   const [activeInvoice, setActiveInvoice] = useState<CustomerSale | null>(null);
   const [isInvoiceOpen, setIsInvoiceOpen] = useState<boolean>(false);
+  const [isInstallModalOpen, setIsInstallModalOpen] = useState<boolean>(false);
 
   // Persist to local storage
   useEffect(() => {
@@ -309,10 +311,13 @@ export default function App() {
               </button>
             )}
 
+            {/* Install App / APK button */}
+            <PWAInstallButton onOpenModal={() => setIsInstallModalOpen(true)} />
+
             {/* Replay Logo Animation button */}
             <button
               onClick={() => setShowSplash(true)}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors"
+              className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors"
               title="Replay Entrance Animation"
             >
               <Play className="w-3.5 h-3.5 text-red-600" />
@@ -515,6 +520,15 @@ export default function App() {
           setActiveInvoice(null);
         }}
       />
+
+      {/* 3. Mobile APK / PWA Install Modal */}
+      <InstallModal
+        isOpen={isInstallModalOpen}
+        onClose={() => setIsInstallModalOpen(false)}
+      />
+
+      {/* 4. Connectivity Offline Banner */}
+      <OfflineBanner />
 
       {/* Footer */}
       <footer className="bg-slate-900 text-slate-400 py-6 text-xs border-t border-slate-800">
