@@ -1,0 +1,6 @@
+{
+  "name": "Om Sai Ram Electricals - Battery & Electronics Portal",
+  "description": "Employee billing, inventory pricing, customer sales & purchase entries for batteries (Ah), inverters (VA), 2W batteries, and electronics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
