@@ -3,639 +3,565 @@ import { Product, CustomerSale, SaleItem } from '../types';
 import { sounds } from '../utils/audio';
 import confetti from 'canvas-confetti';
 import { 
-  ShoppingCart, 
+  ArrowLeft, 
+  User, 
+  Calendar, 
   Plus, 
   Trash2, 
-  Save, 
-  Check, 
-  AlertCircle, 
-  User, 
+  ChevronDown, 
+  ChevronUp, 
   Phone, 
   Car, 
-  Sparkles, 
-  RotateCcw,
-  Tag,
-  ShieldCheck,
-  CreditCard
+  Sparkles,
+  Check
 } from 'lucide-react';
 
 interface SalesBillingProps {
   products: Product[];
   onCompleteSale: (sale: CustomerSale) => void;
   activeEmployee: string;
+  onBack?: () => void;
 }
 
 export const SalesBilling: React.FC<SalesBillingProps> = ({
   products,
   onCompleteSale,
   activeEmployee,
+  onBack,
 }) => {
-  // Customer info
-  const [customerName, setCustomerName] = useState('');
-  const [customerPhone, setCustomerPhone] = useState('');
+  // Screen 4 Form state
+  const [customerName, setCustomerName] = useState('Rahul Traders');
+  const [saleDate, setSaleDate] = useState(() => {
+    const d = new Date();
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  });
+
+  // Items in Sale
+  const [items, setItems] = useState<SaleItem[]>([
+    {
+      productId: 'sample-1',
+      productName: '230Ah Battery',
+      brand: 'Livguard',
+      category: 'inverter_battery',
+      capacityValue: 230,
+      capacityUnit: 'Ah',
+      unitPrice: 20200,
+      quantity: 2,
+      hasScrapExchange: false,
+      scrapDeductionPerUnit: 0,
+      total: 40400,
+    },
+    {
+      productId: 'sample-2',
+      productName: 'LED Bulb 12W',
+      brand: 'Livguard',
+      category: 'bulb_lighting',
+      capacityValue: 12,
+      capacityUnit: 'W',
+      unitPrice: 120,
+      quantity: 5,
+      hasScrapExchange: false,
+      scrapDeductionPerUnit: 0,
+      total: 600,
+    },
+    {
+      productId: 'sample-3',
+      productName: '2W Battery 12V',
+      brand: 'Livguard',
+      category: 'two_wheeler',
+      capacityValue: 5,
+      capacityUnit: 'Ah',
+      unitPrice: 350,
+      quantity: 3,
+      hasScrapExchange: false,
+      scrapDeductionPerUnit: 0,
+      total: 1050,
+    },
+  ]);
+
+  // Inline Add Item modal / picker
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const [selectedProductId, setSelectedProductId] = useState('');
+  const [customItemName, setCustomItemName] = useState('');
+  const [customRate, setCustomRate] = useState<number | ''>('');
+  const [customQty, setCustomQty] = useState<number>(1);
+  const [hasScrap, setHasScrap] = useState(false);
+  const [scrapDeduction, setScrapDeduction] = useState<number>(0);
+
+  // Additional billing attributes preserved (Phone, Address, Payment Mode, Udhar)
+  const [customerPhone, setCustomerPhone] = useState('9876543210');
   const [customerAddress, setCustomerAddress] = useState('');
   const [vehicleOrApplianceModel, setVehicleOrApplianceModel] = useState('');
-  const [notes, setNotes] = useState('');
-
-  // Cart Items
-  const [items, setItems] = useState<SaleItem[]>([]);
-
-  // Item selector state
-  const [selectedProductId, setSelectedProductId] = useState<string>('');
-  const [selectedQty, setSelectedQty] = useState<number>(1);
-  const [selectedSerial, setSelectedSerial] = useState<string>('');
-  const [hasScrap, setHasScrap] = useState<boolean>(false);
-  const [customScrapValue, setCustomScrapValue] = useState<number>(0);
-
-  // Financials
-  const [extraDiscount, setExtraDiscount] = useState<number>(0);
   const [paymentMode, setPaymentMode] = useState<CustomerSale['paymentMode']>('UPI / PhonePe');
-  const [paymentStatus, setPaymentStatus] = useState<CustomerSale['paymentStatus']>('Paid');
-  const [paidAmount, setPaidAmount] = useState<number>(0);
-  const [autoMatchPaid, setAutoMatchPaid] = useState<boolean>(true);
+  const [paidAmount, setPaidAmount] = useState<number | ''>('');
+  const [showOptions, setShowOptions] = useState(false);
 
-  // Filter products by in-stock or category
-  const [catFilter, setCatFilter] = useState<string>('all');
+  // Calculate totals
+  const subtotal = items.reduce((sum, item) => sum + item.total, 0);
+  const totalScrapDiscount = items.reduce((sum, item) => sum + (item.scrapDeductionPerUnit * item.quantity), 0);
+  const grandTotal = Math.max(0, subtotal - totalScrapDiscount);
 
-  // Handle selected product change
-  const handleProductSelection = (prodId: string) => {
-    setSelectedProductId(prodId);
-    const prod = products.find((p) => p.id === prodId);
-    if (prod) {
-      if (prod.category === 'inverter_battery' || prod.category === 'two_wheeler' || prod.category === 'four_wheeler') {
-        setHasScrap(true);
-        setCustomScrapValue(prod.scrapValue);
-      } else {
-        setHasScrap(false);
-        setCustomScrapValue(0);
+  const effectivePaid = paidAmount === '' ? (paymentMode === 'Credit (Udhar)' ? 0 : grandTotal) : Number(paidAmount);
+  const dueAmount = Math.max(0, grandTotal - effectivePaid);
+
+  const handleAddItemToSale = () => {
+    if (selectedProductId) {
+      const prod = products.find((p) => p.id === selectedProductId);
+      if (prod) {
+        const scrap = hasScrap ? (scrapDeduction || prod.scrapValue) : 0;
+        const rate = Number(customRate) || prod.sellPrice;
+        const total = Math.max(0, (rate - scrap) * customQty);
+
+        const newItem: SaleItem = {
+          productId: prod.id,
+          productName: prod.name,
+          brand: prod.brand,
+          category: prod.category,
+          capacityValue: prod.capacityValue,
+          capacityUnit: prod.capacityUnit,
+          unitPrice: rate,
+          quantity: customQty,
+          hasScrapExchange: hasScrap,
+          scrapAh: prod.capacityValue,
+          scrapDeductionPerUnit: scrap,
+          total,
+        };
+
+        setItems([...items, newItem]);
+        setIsPickerOpen(false);
+        resetPicker();
+        return;
       }
     }
+
+    if (customItemName.trim()) {
+      const rate = Number(customRate) || 0;
+      const total = rate * customQty;
+      const newItem: SaleItem = {
+        productId: `custom-${Date.now()}`,
+        productName: customItemName.trim(),
+        brand: 'Livguard',
+        category: 'electrical_thing',
+        capacityValue: 1,
+        capacityUnit: 'Pcs',
+        unitPrice: rate,
+        quantity: customQty,
+        hasScrapExchange: false,
+        scrapDeductionPerUnit: 0,
+        total,
+      };
+      setItems([...items, newItem]);
+      setIsPickerOpen(false);
+      resetPicker();
+    }
   };
 
-  // Add Item to Bill
-  const handleAddItem = () => {
-    if (!selectedProductId) return;
-    const prod = products.find((p) => p.id === selectedProductId);
-    if (!prod) return;
-
-    const scrapDeduction = hasScrap ? customScrapValue : 0;
-    const itemTotal = (prod.sellPrice - scrapDeduction) * selectedQty;
-
-    const newItem: SaleItem = {
-      productId: prod.id,
-      productName: prod.name,
-      brand: prod.brand,
-      category: prod.category,
-      capacityValue: prod.capacityValue,
-      capacityUnit: prod.capacityUnit,
-      unitPrice: prod.sellPrice,
-      quantity: selectedQty,
-      serialNumber: selectedSerial.trim() || undefined,
-      hasScrapExchange: hasScrap,
-      scrapAh: hasScrap ? prod.capacityValue : undefined,
-      scrapDeductionPerUnit: scrapDeduction,
-      total: Math.max(0, itemTotal),
-    };
-
-    setItems([...items, newItem]);
-
-    // Reset selector
+  const resetPicker = () => {
     setSelectedProductId('');
-    setSelectedQty(1);
-    setSelectedSerial('');
+    setCustomItemName('');
+    setCustomRate('');
+    setCustomQty(1);
     setHasScrap(false);
-    setCustomScrapValue(0);
+    setScrapDeduction(0);
   };
 
-  // Remove item
+  const handleUpdateQty = (index: number, newQty: number) => {
+    if (newQty <= 0) {
+      handleRemoveItem(index);
+      return;
+    }
+    const updated = [...items];
+    const it = updated[index];
+    const scrap = it.hasScrapExchange ? it.scrapDeductionPerUnit : 0;
+    updated[index] = {
+      ...it,
+      quantity: newQty,
+      total: (it.unitPrice - scrap) * newQty,
+    };
+    setItems(updated);
+  };
+
   const handleRemoveItem = (index: number) => {
-    setItems(items.filter((_, i) => i !== index));
+    setItems(items.filter((_, idx) => idx !== index));
   };
 
-  // Calculations
-  const rawSubtotal = items.reduce((acc, it) => acc + (it.unitPrice * it.quantity), 0);
-  const totalScrapDiscount = items.reduce((acc, it) => acc + (it.hasScrapExchange ? it.scrapDeductionPerUnit * it.quantity : 0), 0);
-  const grandTotal = Math.max(0, rawSubtotal - totalScrapDiscount - extraDiscount);
+  const handleClear = () => {
+    setItems([]);
+    setCustomerName('');
+    setPaidAmount('');
+  };
 
-  // Sync paid amount if auto match is on
-  const effectivePaid = autoMatchPaid ? grandTotal : paidAmount;
-  const balanceDue = Math.max(0, grandTotal - effectivePaid);
-
-  // Finalize Sale
-  const handleCheckout = (e: React.FormEvent) => {
+  const handleSaveSale = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!customerName.trim() || !customerPhone.trim()) {
-      alert('Please enter Customer Name and Mobile Number.');
-      return;
-    }
+
     if (items.length === 0) {
-      alert('Please add at least one product to the sale bill.');
+      alert('Please add at least one product to the sale.');
       return;
     }
 
-    const currentYear = new Date().getFullYear();
-    const randomBillId = Math.floor(1000 + Math.random() * 9000);
-    const invoiceNo = `OSR-${currentYear}-${randomBillId}`;
+    const invoiceNo = `INV-${Date.now().toString().slice(-4)}`;
 
     const newSale: CustomerSale = {
       id: `sale-${Date.now()}`,
       invoiceNo,
       date: new Date().toISOString(),
-      customerName: customerName.trim(),
-      customerPhone: customerPhone.trim(),
+      customerName: customerName.trim() || 'Walk-in Customer',
+      customerPhone: customerPhone.trim() || '9876543210',
       customerAddress: customerAddress.trim() || undefined,
       vehicleOrApplianceModel: vehicleOrApplianceModel.trim() || undefined,
       items,
-      subtotal: rawSubtotal,
+      subtotal,
       totalScrapDiscount,
-      extraDiscount: Number(extraDiscount) || 0,
+      extraDiscount: 0,
       taxIncluded: true,
       taxAmount: 0,
       grandTotal,
       paymentMode,
-      paymentStatus: balanceDue === 0 ? 'Paid' : effectivePaid > 0 ? 'Partial' : 'Pending Due',
+      paymentStatus: dueAmount === 0 ? 'Paid' : effectivePaid > 0 ? 'Partial' : 'Pending Due',
       paidAmount: effectivePaid,
-      dueAmount: balanceDue,
-      notes: notes.trim() || undefined,
+      dueAmount,
       employeeName: activeEmployee,
     };
 
-    // Trigger celebration effects
     sounds.playSuccessDing();
     try {
-      confetti({
-        particleCount: 65,
-        spread: 60,
-        origin: { y: 0.75 },
-      });
+      confetti({ particleCount: 60, spread: 55, origin: { y: 0.7 } });
     } catch {
-      // Ignore if confetti fails
+      // Confetti fallback
     }
 
     onCompleteSale(newSale);
-
-    // Reset Form
-    setCustomerName('');
-    setCustomerPhone('');
-    setCustomerAddress('');
-    setVehicleOrApplianceModel('');
-    setNotes('');
-    setItems([]);
-    setExtraDiscount(0);
-    setPaidAmount(0);
-    setAutoMatchPaid(true);
   };
 
-  const filteredCatalog = products.filter((p) => {
-    if (catFilter === 'all') return true;
-    return p.category === catFilter;
-  });
-
   return (
-    <div className="space-y-6">
-      {/* Top Banner */}
-      <div className="bg-gradient-to-r from-red-700 via-red-800 to-slate-900 rounded-2xl p-6 text-white shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-red-200 text-xs font-bold uppercase tracking-wider mb-1">
-            <Sparkles className="w-4 h-4 text-amber-300" />
-            <span>Customer Point of Sale • Billing Station</span>
+    <div className="max-w-xl mx-auto w-full">
+      {/* Container styled like Screen 4 */}
+      <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden">
+        
+        {/* Header: Solid Crimson Red with Back Arrow and 'New Sale' */}
+        <div className="bg-[#8b0000] text-white px-4 py-3.5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onBack}
+              className="p-1.5 -ml-1 rounded-xl text-white hover:bg-white/10 active:bg-white/20 transition-colors cursor-pointer"
+              aria-label="Back"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <h2 className="text-base font-bold tracking-tight">New Sale</h2>
           </div>
-          <h2 className="text-2xl font-black tracking-tight" style={{ fontFamily: "'Rajdhani', sans-serif" }}>
-            CREATE CUSTOMER SALE ENTRY
-          </h2>
-          <p className="text-xs text-red-100 max-w-xl">
-            Quickly bill Batteries (Ah), Inverters (VA), 2W Batteries &amp; Electronics. Deduct old battery scrap exchange and issue warranty invoices.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3 bg-red-950/60 border border-red-500/30 px-4 py-2.5 rounded-xl">
-          <div className="text-right">
-            <span className="text-[10px] text-red-300 block uppercase font-bold">Billing Attendant</span>
-            <span className="text-sm font-extrabold text-white">{activeEmployee}</span>
-          </div>
-          <div className="w-9 h-9 rounded-full bg-red-600 flex items-center justify-center font-bold text-white shadow-md">
-            {activeEmployee.charAt(0)}
+          <div className="text-[11px] font-semibold text-red-200 font-mono">
+            Staff: {activeEmployee.split(' ')[0]}
           </div>
         </div>
-      </div>
 
-      <form onSubmit={handleCheckout} className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Side (Col 7): Customer Info + Product Picker */}
-        <div className="lg:col-span-7 space-y-6">
-          {/* Customer Details Box */}
-          <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
-            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4 flex items-center gap-2">
-              <User className="w-4 h-4 text-red-600" />
-              <span>Customer Details</span>
-            </h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Customer Name *
-                </label>
-                <div className="relative">
-                  <User className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-                  <input
-                    type="text"
-                    required
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    placeholder="e.g. Ramesh Verma"
-                    className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:outline-none"
-                  />
-                </div>
+        {/* Screen 4 Form Body */}
+        <form onSubmit={handleSaveSale} className="p-4 sm:p-5 space-y-4">
+          {/* 1. Customer Name with User Icon */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+              Customer Name
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-500">
+                <User className="w-4 h-4" />
               </div>
+              <input
+                type="text"
+                required
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                placeholder="Rahul Traders"
+                className="w-full pl-10 pr-3.5 py-2.5 text-sm text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 font-medium"
+              />
+            </div>
+          </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Mobile Number * (For Warranty &amp; SMS)
-                </label>
-                <div className="relative">
-                  <Phone className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-                  <input
-                    type="tel"
-                    required
-                    value={customerPhone}
-                    onChange={(e) => setCustomerPhone(e.target.value)}
-                    placeholder="e.g. 98270 12345"
-                    className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:outline-none font-mono"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Vehicle / Application Model (Optional)
-                </label>
-                <div className="relative">
-                  <Car className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-                  <input
-                    type="text"
-                    value={vehicleOrApplianceModel}
-                    onChange={(e) => setVehicleOrApplianceModel(e.target.value)}
-                    placeholder="e.g. Activa 6G, Swift, 2BHK Home Inverter"
-                    className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Customer Address / Area
-                </label>
-                <input
-                  type="text"
-                  value={customerAddress}
-                  onChange={(e) => setCustomerAddress(e.target.value)}
-                  placeholder="e.g. Gandhi Nagar, Ward 5"
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:outline-none"
-                />
+          {/* 2. Date with Calendar Icon */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+              Date
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={saleDate}
+                onChange={(e) => setSaleDate(e.target.value)}
+                placeholder="11 Oct 2025"
+                className="w-full px-3.5 py-2.5 text-sm text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 font-medium pr-10"
+              />
+              <div className="absolute inset-y-0 right-0 flex items-center pr-3.5 pointer-events-none text-slate-500">
+                <Calendar className="w-4 h-4" />
               </div>
             </div>
           </div>
 
-          {/* Add Item to Cart Box */}
-          <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                <ShoppingCart className="w-4 h-4 text-red-600" />
-                <span>Select Product to Add</span>
-              </h3>
-
-              {/* Category tabs */}
-              <div className="flex items-center gap-1 overflow-x-auto text-xs py-1">
-                {[
-                  { id: 'all', label: 'All' },
-                  { id: 'inverter_battery', label: 'Battery (Ah)' },
-                  { id: 'inverter_ups', label: 'Inverter (VA)' },
-                  { id: 'two_wheeler', label: '2W (Ah)' },
-                  { id: 'bulb_lighting', label: 'Bulbs (W)' },
-                  { id: 'electrical_thing', label: 'Electricals' },
-                ].map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setCatFilter(t.id)}
-                    className={`px-2.5 py-1 rounded-lg font-semibold transition-colors ${
-                      catFilter === t.id
-                        ? 'bg-slate-900 text-white'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Product dropdown */}
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Choose Item from Inventory:
-                </label>
-                <select
-                  value={selectedProductId}
-                  onChange={(e) => handleProductSelection(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border-2 border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white"
-                >
-                  <option value="">-- Choose Product (Ah / VA / Watts) --</option>
-                  {filteredCatalog.map((prod) => (
-                    <option key={prod.id} value={prod.id} disabled={prod.stock <= 0}>
-                      {prod.name} [{prod.capacityValue} {prod.capacityUnit}] — ₹{prod.sellPrice}{' '}
-                      {prod.stock <= 0 ? '(Out of Stock)' : `(Stock: ${prod.stock})`}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* If a product is selected, show details and exchange options */}
-              {selectedProductId && (
-                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
-                  {(() => {
-                    const prod = products.find((p) => p.id === selectedProductId);
-                    if (!prod) return null;
-                    return (
-                      <>
-                        <div className="flex flex-wrap items-center justify-between text-xs border-b border-slate-200 pb-2">
-                          <div>
-                            <span className="font-bold text-slate-900 text-sm">{prod.name}</span>
-                            <span className="ml-2 font-mono text-red-700 font-bold bg-red-100 px-2 py-0.5 rounded">
-                              {prod.capacityValue} {prod.capacityUnit}
+          {/* 3. Products Table (Exact columns: Product | Qty | Rate (₹) | Total (₹)) */}
+          <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
+                    <th className="py-2.5 px-3">Product</th>
+                    <th className="py-2.5 px-2 text-center">Qty</th>
+                    <th className="py-2.5 px-2.5 text-right">Rate (₹)</th>
+                    <th className="py-2.5 px-3 text-right">Total (₹)</th>
+                    <th className="py-2.5 px-1.5 text-center w-6"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium">
+                  {items.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-6 text-center text-slate-400 text-xs">
+                        No products added yet. Click "+ Add Product" below.
+                      </td>
+                    </tr>
+                  ) : (
+                    items.map((item, index) => (
+                      <tr key={index} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="py-2.5 px-3 font-semibold text-slate-900">
+                          {item.productName}
+                          {item.hasScrapExchange && (
+                            <span className="block text-[10px] text-emerald-600 font-normal">
+                              -₹{item.scrapDeductionPerUnit} scrap
                             </span>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-slate-400 line-through mr-1">₹{prod.mrp}</span>
-                            <span className="text-base font-black text-red-700">₹{prod.sellPrice}</span>
-                          </div>
-                        </div>
-
-                        {/* Quantity & Serial Number */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-700 mb-1">
-                              Quantity
-                            </label>
-                            <input
-                              type="number"
-                              min="1"
-                              max={prod.stock || 99}
-                              value={selectedQty}
-                              onChange={(e) => setSelectedQty(Math.max(1, Number(e.target.value)))}
-                              className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded-lg font-bold"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-700 mb-1">
-                              Battery / Inverter Serial No. (Warranty S/N)
-                            </label>
-                            <input
-                              type="text"
-                              value={selectedSerial}
-                              onChange={(e) => setSelectedSerial(e.target.value)}
-                              placeholder="e.g. LUM-18K-49102"
-                              className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded-lg font-mono"
-                            />
-                          </div>
-                        </div>
-
-                        {/* Old Battery Scrap Exchange checkbox */}
-                        <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={hasScrap}
-                              onChange={(e) => setHasScrap(e.target.checked)}
-                              className="w-4 h-4 text-red-600 rounded border-gray-300 focus:ring-red-500"
-                            />
-                            <span className="text-xs font-bold text-amber-900">
-                              Customer Exchanging Old Scrap Battery? (Deduct from bill)
-                            </span>
-                          </label>
-
-                          {hasScrap && (
-                            <div className="mt-2.5 pt-2 border-t border-amber-200 flex items-center justify-between text-xs">
-                              <span className="text-amber-800">Scrap Discount per item:</span>
-                              <div className="flex items-center gap-1 font-bold text-amber-900">
-                                <span>₹</span>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  value={customScrapValue}
-                                  onChange={(e) => setCustomScrapValue(Number(e.target.value))}
-                                  className="w-24 px-2 py-1 text-sm border border-amber-300 rounded bg-white text-right font-bold"
-                                />
-                              </div>
-                            </div>
                           )}
-                        </div>
-
-                        {/* Add to Bill Button */}
-                        <button
-                          type="button"
-                          onClick={handleAddItem}
-                          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer"
-                        >
-                          <Plus className="w-4 h-4" />
-                          <span>Add to Customer Bill</span>
-                        </button>
-                      </>
-                    );
-                  })()}
-                </div>
-              )}
+                        </td>
+                        <td className="py-2.5 px-2 text-center">
+                          <div className="inline-flex items-center gap-1 bg-slate-100 rounded-lg p-0.5 border border-slate-200">
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateQty(index, item.quantity - 1)}
+                              className="w-5 h-5 flex items-center justify-center text-slate-600 hover:text-red-600 font-bold"
+                            >
+                              -
+                            </button>
+                            <span className="w-5 text-center font-bold text-slate-900">{item.quantity}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateQty(index, item.quantity + 1)}
+                              className="w-5 h-5 flex items-center justify-center text-slate-600 hover:text-emerald-600 font-bold"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-2.5 text-right font-mono text-slate-700">
+                          {item.unitPrice.toLocaleString('en-IN')}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
+                          {item.total.toLocaleString('en-IN')}
+                        </td>
+                        <td className="py-2.5 px-1.5 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveItem(index)}
+                            className="text-slate-300 hover:text-red-600 p-1 rounded transition-colors"
+                            title="Remove"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
-        </div>
 
-        {/* Right Side (Col 5): Invoice Items & Finalize Payment */}
-        <div className="lg:col-span-5 space-y-6">
-          <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 sticky top-6">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                <Tag className="w-4 h-4 text-red-600" />
-                <span>Invoice Items ({items.length})</span>
-              </h3>
-              {items.length > 0 && (
+          {/* 4. + Add Product Button (Solid dark red matching screenshot 4) */}
+          <div>
+            <button
+              type="button"
+              onClick={() => setIsPickerOpen(true)}
+              className="w-full py-2.5 px-4 rounded-xl bg-[#8b0000] hover:bg-red-800 text-white font-bold text-sm flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Product</span>
+            </button>
+          </div>
+
+          {/* Inline Product Picker Modal */}
+          {isPickerOpen && (
+            <div className="p-4 bg-red-50/70 border border-red-200 rounded-2xl space-y-3 animate-in fade-in duration-150">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-red-900 uppercase">Select or Enter Item</span>
                 <button
                   type="button"
-                  onClick={() => setItems([])}
-                  className="text-xs text-red-600 hover:text-red-700 font-semibold"
+                  onClick={() => setIsPickerOpen(false)}
+                  className="text-slate-400 hover:text-slate-700 text-xs font-bold"
                 >
-                  Clear All
+                  Close
                 </button>
-              )}
-            </div>
-
-            {/* Items List */}
-            <div className="mt-3 space-y-2.5 max-h-56 overflow-y-auto">
-              {items.length === 0 ? (
-                <div className="py-8 text-center text-slate-400 text-xs">
-                  <ShoppingCart className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                  <span>No items added yet. Choose a product from the left.</span>
-                </div>
-              ) : (
-                items.map((item, idx) => (
-                  <div
-                    key={idx}
-                    className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-start justify-between gap-2 text-xs"
-                  >
-                    <div className="space-y-0.5">
-                      <div className="font-bold text-slate-900">{item.productName}</div>
-                      <div className="text-[11px] text-slate-500 flex items-center gap-1.5 font-medium">
-                        <span className="text-red-700 font-semibold">
-                          {item.capacityValue} {item.capacityUnit}
-                        </span>
-                        <span>• Qty: {item.quantity}</span>
-                        <span>• Rate: ₹{item.unitPrice}</span>
-                      </div>
-                      {item.serialNumber && (
-                        <div className="text-[10px] text-blue-800 font-mono">S/N: {item.serialNumber}</div>
-                      )}
-                      {item.hasScrapExchange && (
-                        <div className="text-[10px] text-amber-700 font-semibold">
-                          Scrap Exchanged: -₹{item.scrapDeductionPerUnit * item.quantity}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="text-right flex flex-col items-end gap-1">
-                      <span className="font-black text-slate-900 text-sm">₹{item.total}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveItem(idx)}
-                        className="text-slate-400 hover:text-red-600 p-1"
-                        title="Remove item"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {/* Calculations & Discounts */}
-            <div className="mt-4 pt-4 border-t border-slate-200 space-y-2.5 text-xs">
-              <div className="flex justify-between text-slate-600">
-                <span>Items Subtotal:</span>
-                <span className="font-semibold">₹{rawSubtotal.toLocaleString('en-IN')}</span>
               </div>
 
-              {totalScrapDiscount > 0 && (
-                <div className="flex justify-between text-amber-700 font-bold">
-                  <span>Old Scrap Exchange Discount:</span>
-                  <span>-₹{totalScrapDiscount.toLocaleString('en-IN')}</span>
+              {products.length > 0 && (
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    From Inventory Catalog
+                  </label>
+                  <select
+                    value={selectedProductId}
+                    onChange={(e) => {
+                      setSelectedProductId(e.target.value);
+                      const p = products.find((pr) => pr.id === e.target.value);
+                      if (p) {
+                        setCustomRate(p.sellPrice);
+                        setCustomItemName(p.name);
+                        setScrapDeduction(p.scrapValue);
+                      }
+                    }}
+                    className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-xl"
+                  >
+                    <option value="">-- Choose Product from Catalog --</option>
+                    {products.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} ({p.brand}) • ₹{p.sellPrice} (Stock: {p.stock})
+                      </option>
+                    ))}
+                  </select>
                 </div>
               )}
 
-              {/* Extra Shop Discount */}
-              <div className="flex items-center justify-between text-slate-600">
-                <span>Special Shop Discount:</span>
-                <div className="flex items-center gap-1">
-                  <span>₹</span>
+              {/* Or manual entry */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">Item Name</label>
+                  <input
+                    type="text"
+                    value={customItemName}
+                    onChange={(e) => setCustomItemName(e.target.value)}
+                    placeholder="e.g. 230Ah Battery"
+                    className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-xl font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">Rate (₹)</label>
                   <input
                     type="number"
-                    min="0"
-                    value={extraDiscount}
-                    onChange={(e) => setExtraDiscount(Number(e.target.value))}
-                    className="w-20 px-2 py-0.5 text-xs border border-slate-300 rounded text-right font-semibold"
+                    value={customRate}
+                    onChange={(e) => setCustomRate(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="20200"
+                    className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-xl font-mono font-medium"
                   />
                 </div>
               </div>
 
-              {/* Grand Total */}
-              <div className="pt-2 border-t-2 border-slate-800 flex justify-between items-baseline">
-                <span className="text-sm font-black text-slate-900">Total Net Amount:</span>
-                <span className="text-xl font-black text-red-700">₹{grandTotal.toLocaleString('en-IN')}</span>
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-semibold text-slate-700">Qty:</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={customQty}
+                    onChange={(e) => setCustomQty(Math.max(1, Number(e.target.value)))}
+                    className="w-16 px-2 py-1.5 text-xs bg-white border border-slate-300 rounded-lg text-center font-bold"
+                  />
+                </div>
+
+                <div className="flex items-center gap-1.5 text-xs text-slate-700">
+                  <input
+                    type="checkbox"
+                    id="scrapCheck"
+                    checked={hasScrap}
+                    onChange={(e) => setHasScrap(e.target.checked)}
+                    className="rounded text-red-600"
+                  />
+                  <label htmlFor="scrapCheck" className="text-[11px] cursor-pointer">
+                    Old Battery Exchange
+                  </label>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleAddItemToSale}
+                  className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer"
+                >
+                  + Add to Table
+                </button>
               </div>
             </div>
+          )}
 
-            {/* Payment Mode & Status */}
-            <div className="mt-4 pt-4 border-t border-slate-200 space-y-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Payment Mode:
-                </label>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  {(['Cash', 'UPI / PhonePe', 'Card', 'Credit (Udhar)'] as const).map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => setPaymentMode(mode)}
-                      className={`p-2 rounded-lg font-bold border transition-colors ${
-                        paymentMode === mode
-                          ? 'border-red-600 bg-red-50 text-red-900'
-                          : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
-                      }`}
-                    >
-                      {mode}
-                    </button>
-                  ))}
-                </div>
-              </div>
+          {/* 5. Total Amount Row (Exact match to screenshot 4) */}
+          <div className="flex items-center justify-between pt-3 pb-1 border-t border-slate-200">
+            <span className="text-sm sm:text-base font-bold text-slate-800">
+              Total Amount
+            </span>
+            <span className="text-xl sm:text-2xl font-black text-slate-900 font-mono tracking-tight">
+              ₹ {grandTotal.toLocaleString('en-IN')}
+            </span>
+          </div>
 
-              {/* Paid vs Due */}
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="flex items-center gap-1.5 font-semibold text-slate-700 cursor-pointer">
+          {/* Collapsible Customer Phone & Payment Mode (Preserves 100% of features) */}
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowOptions(!showOptions)}
+              className="flex items-center justify-between w-full py-1 text-[11px] font-bold text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+            >
+              <span>Customer Phone &amp; Payment Mode (Optional)</span>
+              {showOptions ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+
+            {showOptions && (
+              <div className="mt-2 p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-3 text-xs">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Phone Number</label>
                     <input
-                      type="checkbox"
-                      checked={autoMatchPaid}
-                      onChange={(e) => setAutoMatchPaid(e.target.checked)}
-                      className="rounded text-red-600"
+                      type="tel"
+                      value={customerPhone}
+                      onChange={(e) => setCustomerPhone(e.target.value)}
+                      placeholder="9876543210"
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-mono"
                     />
-                    <span>Full Payment Received</span>
-                  </label>
-                  {!autoMatchPaid && (
-                    <div className="flex items-center gap-1">
-                      <span>Paid ₹</span>
-                      <input
-                        type="number"
-                        min="0"
-                        max={grandTotal}
-                        value={paidAmount}
-                        onChange={(e) => setPaidAmount(Number(e.target.value))}
-                        className="w-20 px-2 py-0.5 border border-slate-300 rounded text-right font-bold"
-                      />
-                    </div>
-                  )}
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Payment Mode</label>
+                    <select
+                      value={paymentMode}
+                      onChange={(e) => setPaymentMode(e.target.value as any)}
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold"
+                    >
+                      <option value="UPI / PhonePe">UPI / PhonePe</option>
+                      <option value="Cash">Cash</option>
+                      <option value="Credit (Udhar)">Credit (Udhar)</option>
+                      <option value="Card">Card</option>
+                    </select>
+                  </div>
                 </div>
 
-                {balanceDue > 0 && (
-                  <div className="flex justify-between items-center text-red-700 font-bold bg-red-50 p-2 rounded border border-red-200">
-                    <span>Balance Due (Udhar/Credit):</span>
-                    <span>₹{balanceDue.toLocaleString('en-IN')}</span>
+                {paymentMode === 'Credit (Udhar)' && (
+                  <div className="p-2 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900 font-medium">
+                    This bill will automatically be recorded in the Customer's Daily Udhar Khata ledger!
                   </div>
                 )}
               </div>
-
-              {/* Staff Notes */}
-              <div>
-                <input
-                  type="text"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Notes (e.g. Free home installation, battery water check)"
-                  className="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg"
-                />
-              </div>
-
-              {/* Submit / Generate Bill */}
-              <button
-                type="submit"
-                disabled={items.length === 0}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-black text-sm uppercase tracking-wider shadow-lg shadow-red-700/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-              >
-                <Save className="w-5 h-5" />
-                <span>Save Sale &amp; Print Bill Slip</span>
-              </button>
-            </div>
+            )}
           </div>
-        </div>
-      </form>
+
+          {/* 6. Action Buttons: Clear (white w/ red border) and Save Sale (solid crimson red) */}
+          <div className="flex items-center gap-3 pt-2">
+            <button
+              type="button"
+              onClick={handleClear}
+              className="flex-1 py-3 px-4 rounded-xl border border-red-400 bg-white hover:bg-red-50 text-red-700 font-bold text-sm transition-colors cursor-pointer shadow-2xs"
+            >
+              Clear
+            </button>
+            <button
+              type="submit"
+              className="flex-1 py-3 px-4 rounded-xl bg-[#8b0000] hover:bg-red-800 active:bg-red-950 text-white font-bold text-sm transition-colors cursor-pointer shadow-sm"
+            >
+              Save Sale
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };

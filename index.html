@@ -19,6 +19,19 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
+    <script>
+      // Suppress benign HMR WebSocket reconnection errors in Cloud Run iframe
+      window.addEventListener('error', function (event) {
+        if (event.message && (event.message.includes('WebSocket') || event.message.includes('vite'))) {
+          event.preventDefault();
+        }
+      });
+      window.addEventListener('unhandledrejection', function (event) {
+        if (event.reason && String(event.reason).includes('WebSocket')) {
+          event.preventDefault();
+        }
+      });
+    </script>
   </head>
   <body>
     <div id="root"></div>

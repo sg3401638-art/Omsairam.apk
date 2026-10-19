@@ -99,3 +99,37 @@ export interface ScrapInventoryItem {
   averageBuyRate: number;
   lastUpdated: string;
 }
+
+export interface UdharTransaction {
+  id: string;
+  date: string;
+  type: 'credit_given' | 'payment_received';
+  amount: number;
+  paymentMode?: 'Cash' | 'UPI / PhonePe' | 'Bank Transfer';
+  description: string;
+  invoiceNo?: string;
+  recordedBy: string;
+}
+
+export interface MerchantKhataRecord {
+  id: string;
+  customerName: string;
+  phone: string;
+  type: 'Mechanic' | 'Retail Customer' | 'Contractor' | 'Dealer';
+  address?: string;
+  totalCreditGiven: number;
+  totalPaymentReceived: number;
+  balanceDue: number;
+  lastUpdated: string;
+  transactions: UdharTransaction[];
+}
+
+export interface ActivityLog {
+  id: string;
+  timestamp: string;
+  action: 'sale_created' | 'payment_received' | 'udhar_given' | 'product_added' | 'product_updated' | 'product_deleted' | 'stock_purchased' | 'stock_adjusted' | 'price_updated';
+  title: string;
+  details: string;
+  performedBy: string;
+  amount?: number;
+}

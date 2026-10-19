@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Product, ProductCategory } from '../types';
 import { 
   Search, 
@@ -15,31 +15,59 @@ import {
   ShoppingCart,
   Filter,
   Layers,
-  ArrowUpDown
+  ArrowUpDown,
+  Trash2,
+  AlertOctagon,
+  ArrowLeft
 } from 'lucide-react';
 
 interface ProductCatalogProps {
   products: Product[];
   onAddProduct: () => void;
   onEditProduct: (product: Product) => void;
+  onDeleteProduct: (productId: string, productName: string) => void;
   onQuickSell: (product: Product) => void;
   onUpdateStock: (productId: string, newStock: number) => void;
   onQuickUpdatePrice: (productId: string, newSellPrice: number) => void;
+  isOwner?: boolean;
+  selectedCategory?: string;
+  initialSearchQuery?: string;
+  onBackToHome?: () => void;
 }
 
 export const ProductCatalog: React.FC<ProductCatalogProps> = ({
   products,
   onAddProduct,
   onEditProduct,
+  onDeleteProduct,
   onQuickSell,
   onUpdateStock,
   onQuickUpdatePrice,
+  isOwner = false,
+  selectedCategory = 'all',
+  initialSearchQuery = '',
+  onBackToHome,
 }) => {
-  const [activeCategory, setActiveCategory] = useState<string>('all');
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [activeCategory, setActiveCategory] = useState<string>(selectedCategory);
+  const [searchQuery, setSearchQuery] = useState<string>(initialSearchQuery);
+
+  useEffect(() => {
+    if (selectedCategory) {
+      setActiveCategory(selectedCategory);
+    }
+  }, [selectedCategory]);
+
+  useEffect(() => {
+    if (initialSearchQuery !== undefined) {
+      setSearchQuery(initialSearchQuery);
+    }
+  }, [initialSearchQuery]);
   const [brandFilter, setBrandFilter] = useState<string>('all');
   const [stockFilter, setStockFilter] = useState<'all' | 'in_stock' | 'low_stock'>('all');
   const [sortBy, setSortBy] = useState<'name' | 'capacity' | 'price_low' | 'price_high' | 'stock'>('capacity');
+
+  // Deleting product confirmation state
+  const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
 
   // Fast inline editing price state
   const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
@@ -107,9 +135,24 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      {onBackToHome && (
+        <div className="flex items-center justify-between gap-3">
+          <button
+            onClick={onBackToHome}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 shadow-2xs transition-colors cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4 text-red-600" />
+            <span>← Back to Sorted Dashboard</span>
+          </button>
+          <div className="text-xs text-slate-500 font-medium hidden sm:block">
+            Showing <span className="font-bold text-slate-800">{filteredProducts.length}</span> items
+          </div>
+        </div>
+      )}
+
       {/* Search & Actions Bar */}
-      <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 flex flex-col md:flex-row items-center justify-between gap-4">
+      <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-2xs border border-slate-200 flex flex-col md:flex-row items-center justify-between gap-4">
         {/* Search Input */}
         <div className="relative w-full md:max-w-md">
           <Search className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
@@ -359,17 +402,33 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
                     )}
                   </div>
 
-                  {/* Dealer Cost (Employee Eyes Only) */}
+                  {/* Dealer Cost & Profit (Confidential - Owner Only) */}
                   <div className="text-right">
-                    <span className="text-[10px] text-slate-400 font-semibold block uppercase">
-                      Dealer Cost
-                    </span>
-                    <span className="text-xs font-semibold text-slate-600 font-mono">
-                      ₹{prod.purchasePrice.toLocaleString('en-IN')}
-                    </span>
-                    <div className="text-[10px] text-emerald-700 font-bold">
-                      +₹{prod.sellPrice - prod.purchasePrice} profit
-                    </div>
+                    {isOwner ? (
+                      <>
+                        <span className="text-[10px] text-slate-400 font-semibold block uppercase">
+                          Wholesale Cost
+                        </span>
+                        <span className="text-xs font-semibold text-slate-600 font-mono">
+                          ₹{prod.purchasePrice.toLocaleString('en-IN')}
+                        </span>
+                        <div className="text-[10px] text-emerald-700 font-bold">
+                          +₹{prod.sellPrice - prod.purchasePrice} profit
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-[10px] text-slate-400 font-semibold block uppercase">
+                          Customer Savings
+                        </span>
+                        <span className="text-xs font-bold text-emerald-600 font-mono">
+                          {prod.mrp > prod.sellPrice ? `Save ₹${(prod.mrp - prod.sellPrice).toLocaleString('en-IN')}` : 'Best Net Rate'}
+                        </span>
+                        <div className="text-[9px] text-slate-400 font-medium">
+                          Cost: 🔒 Owner
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -439,6 +498,15 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
                   <Edit3 className="w-4 h-4" />
                 </button>
 
+                {/* Delete Product Button */}
+                <button
+                  onClick={() => setDeletingProduct(prod)}
+                  className="p-2 rounded-xl border border-red-200 hover:bg-red-50 text-red-600 hover:border-red-300 transition-colors cursor-pointer"
+                  title="Delete unnecessary product from store"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+
                 <button
                   onClick={() => onQuickSell(prod)}
                   disabled={isOutOfStock}
@@ -454,23 +522,94 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
       </div>
 
       {sortedProducts.length === 0 && (
-        <div className="bg-white rounded-2xl p-12 text-center border border-slate-200">
-          <BatteryCharging className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-          <h3 className="text-base font-bold text-slate-800">No products match your search or filter</h3>
-          <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-            Try clearing the search query or category filters, or click "Add New Product" to add it to the catalog.
-          </p>
-          <button
-            onClick={() => {
-              setSearchQuery('');
-              setActiveCategory('all');
-              setBrandFilter('all');
-              setStockFilter('all');
-            }}
-            className="mt-4 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors"
-          >
-            Reset All Filters
-          </button>
+        <div className="bg-white rounded-2xl p-10 sm:p-14 text-center border border-slate-200 shadow-xs">
+          <div className="w-16 h-16 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-4">
+            <BatteryCharging className="w-8 h-8 text-slate-400" />
+          </div>
+          {products.length === 0 ? (
+            <div>
+              <h3 className="text-lg font-black text-slate-900">Store Catalog is Clean (0 Products)</h3>
+              <p className="text-xs text-slate-500 mt-1.5 max-w-md mx-auto leading-relaxed">
+                All previous items have been removed as requested. Your inventory is ready for fresh real-time products.
+              </p>
+              <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+                <button
+                  onClick={onAddProduct}
+                  className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs uppercase tracking-wider shadow-md shadow-red-600/30 transition-all cursor-pointer flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>+ Add First Product</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <h3 className="text-base font-bold text-slate-800">No products match your search or filter</h3>
+              <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                Try clearing the search query or category filters, or click "Add New Product" to add it to the catalog.
+              </p>
+              <div className="mt-4 flex items-center justify-center gap-2">
+                <button
+                  onClick={() => {
+                    setSearchQuery('');
+                    setActiveCategory('all');
+                    setBrandFilter('all');
+                    setStockFilter('all');
+                  }}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Reset All Filters
+                </button>
+                <button
+                  onClick={onAddProduct}
+                  className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-colors cursor-pointer"
+                >
+                  + Add Product
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Delete Product Confirmation Modal */}
+      {deletingProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            <div className="text-center">
+              <h3 className="text-base font-bold text-slate-900">Delete Product from Store?</h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Are you sure you want to remove <strong className="text-slate-900">{deletingProduct.name}</strong> ({deletingProduct.capacityValue} {deletingProduct.capacityUnit})?
+              </p>
+              <p className="text-[11px] text-amber-700 font-semibold mt-1">
+                This item will be permanently removed from catalog and price lists.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeletingProduct(null)}
+                className="flex-1 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+              >
+                Keep Product
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onDeleteProduct(deletingProduct.id, deletingProduct.name);
+                  setDeletingProduct(null);
+                }}
+                className="flex-1 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-xl shadow transition-colors cursor-pointer"
+              >
+                Confirm Delete
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

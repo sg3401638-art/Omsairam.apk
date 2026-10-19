@@ -1,0 +1,16 @@
+<resources>
+    <!-- Base application theme. -->
+    <style name="Theme.Omsairam" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
+        <item name="colorPrimary">#B91C1C</item>
+        <item name="colorPrimaryVariant">#991B1B</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="android:statusBarColor">#7F1D1D</item>
+    </style>
+
+    <style name="Theme.Omsairam.NoActionBar" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#B91C1C</item>
+        <item name="colorPrimaryVariant">#991B1B</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="android:statusBarColor">#7F1D1D</item>
+    </style>
+</resources>

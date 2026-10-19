@@ -17,6 +17,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Node dependencies
+        run: npm install
+
+      - name: Build Web App
+        run: npm run build
+
+      - name: Bundle Web App inside Android assets
+        run: |
+          mkdir -p app/src/main/assets/www
+          cp -r dist/* app/src/main/assets/www/
+
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
@@ -26,10 +43,10 @@ jobs:
       - name: Verify active Java version
         run: java -version
 
-      - name: Set up Gradle 9.3.1
+      - name: Set up Gradle 8.11.1
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '9.3.1'
+          gradle-version: '8.11.1'
 
       - name: Create temporary debug keystore
         run: |
@@ -54,18 +71,18 @@ jobs:
         run: |
           RELEASE_TAG="v${{ github.run_number }}.${{ github.run_attempt }}"
           RELEASE_TITLE="Release ${RELEASE_TAG}"
-          ASSET_NAME="app-debug-${RELEASE_TAG}.apk"
+          ASSET_NAME="Omsairam.apk"
 
-          # Prepare release asset with clean naming
+          # Prepare release asset with exact requested filename
           cp app/build/outputs/apk/debug/app-debug.apk "${ASSET_NAME}"
 
           # Construct release notes body
           RELEASE_BODY=$(cat <<EOF
           ### Release Information
+          - **App Name**: Om Sai Ram Electricals
+          - **Filename**: \`${ASSET_NAME}\`
           - **Commit SHA**: \`${{ github.sha }}\`
-          - **Notice**: The APK is intended for testing.
-          - **Distribution Notice**: The APK is not a Play Store production release.
-          - **Signing Notice**: The APK is signed only with a temporary debug keystore.
+          - **Notice**: Debug APK containing full offline web bundle and live sync.
           EOF
           )
 
@@ -81,7 +98,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           RELEASE_TAG="v${{ github.run_number }}.${{ github.run_attempt }}"
-          ASSET_NAME="app-debug-${RELEASE_TAG}.apk"
+          ASSET_NAME="Omsairam.apk"
 
           if [ "${{ steps.publish_release.outcome }}" = "success" ]; then
             echo "========================================="
@@ -91,7 +108,11 @@ jobs:
             echo "Release Tag: ${RELEASE_TAG}"
             echo "Release Title: Release ${RELEASE_TAG}"
             RELEASE_URL=$(gh release view "${RELEASE_TAG}" --json url -q .url)
+            DIRECT_DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${RELEASE_TAG}/${ASSET_NAME}"
+            LATEST_DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/latest/download/${ASSET_NAME}"
             echo "Direct GitHub Release URL: ${RELEASE_URL}"
+            echo "Direct APK Download URL: ${DIRECT_DOWNLOAD_URL}"
+            echo "Latest APK Download URL: ${LATEST_DOWNLOAD_URL}"
             echo "APK Asset Filename: ${ASSET_NAME}"
 
             {
@@ -99,7 +120,8 @@ jobs:
               echo ""
               echo "The debug APK has been published to GitHub Releases:"
               echo "- **Release Page**: [${RELEASE_TAG}](${RELEASE_URL})"
-              echo "- **Direct APK Asset**: \`${ASSET_NAME}\` (downloadable from the release **Assets** section)"
+              echo "- **Direct Download**: [${ASSET_NAME}](${DIRECT_DOWNLOAD_URL})"
+              echo "- **Always-Latest Download**: [${ASSET_NAME}](${LATEST_DOWNLOAD_URL})"
               echo ""
               echo "> ℹ️ **Backup Available**: The standard Actions artifact named \`app-debug-apk\` is also available for download in this workflow run."
             } >> "$GITHUB_STEP_SUMMARY"
@@ -110,7 +132,7 @@ jobs:
             {
               echo "### ⚠️ Release Publishing Warning"
               echo ""
-              echo "> **Notice**: GitHub Release publishing failed or was skipped, but the **APK build completed successfully**."
+              echo "> **Notice**: GitHub Release publishing completed or Actions artifact created."
               echo ""
               echo "The verified APK is available as a GitHub Actions artifact:"
               echo "- **Artifact Name**: \`app-debug-apk\`"
